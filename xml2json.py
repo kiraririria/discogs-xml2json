@@ -1,9 +1,9 @@
-import json
 import time
-import xml.etree.ElementTree as ET
 import argparse
 from datetime import timedelta
-from typing import Any, Dict
+from typing import Any
+
+from xml2json.parser import DiscogsXMLParser
 
 
 def timer(func) -> Any:
@@ -24,54 +24,20 @@ def timer(func) -> Any:
     return wrapper
 
 
-@timer
-def run(input_file) -> None:
-    for event, element in ET.iterparse(input_file, events=("end",)):
-        if element.tag == "release":
-            print(element.find("title").text)
-            element.clear()
-
-
-def element_to_dict(element: ET.Element) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-
-    if element.attrib:
-        result["@attributes"] = element.attrib
-
-    if element.text and element.text.strip():
-        result["#text"] = element.text.strip()
-
-    for child in element:
-        child_data: Dict[str, Any] = element_to_dict(child)
-
-        if child.tag in result:
-            if isinstance(result[child.tag], list):
-                result[child.tag].append(child_data)
-            else:
-                result[child.tag] = [result[child.tag], child_data]
-        else:
-            result[child.tag] = child_data
-
-    return result
-
-@timer
-def convert_xml_to_jsonl(input_file: str, output_file: str) -> None:
-    with open(output_file, 'w', encoding='utf-8') as json_file:
-        for event, element in ET.iterparse(input_file, events=('end',)):
-            if element.tag == "release":
-                release_dict: Dict[str, Any] = element_to_dict(element)
-                json_line: str = json.dumps(release_dict, ensure_ascii=False)
-                json_file.write(json_line + '\n')
-                element.clear()
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser(description='Process XML file')
     parser.add_argument('-i','--input', type=str, nargs='?',
-                        default="d:\\Downloads\\discogs_20241201_releases.xml\\discogs_20241201_releases.xml",
+                        default="C:\\Users\\Ivan\\PycharmProjects\\discogs-xml2json\\samples\\artists.xml",
                         help='Path to XML file')
     parser.add_argument('-o','--output', type=str, nargs='?',
-                        default="d:\\Downloads\\discogs_20241201_releases.xml\\discogs_20241201_releases.jsonl",
+                        default="C:\\Users\\Ivan\\PycharmProjects\\discogs-xml2json\\out\\artists.jsonl",
                         help='Path to JSONL file')
     args = parser.parse_args()
 
-    convert_xml_to_jsonl(args.input, args.output)
+
+
+    xml_parser = DiscogsXMLParser(args.input)
+    xml_parser.parse()
+    # convert_xml_to_jsonl(args.input, args.output)
