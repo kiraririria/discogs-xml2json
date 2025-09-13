@@ -1,10 +1,8 @@
 import time
-import argparse
 from datetime import timedelta
 from typing import Any
 
-from xml2json.parser import DiscogsXMLParser
-
+from xml2json.exporter import DumpExporter
 
 def timer(func) -> Any:
     def wrapper(*args, **kwargs):
@@ -23,21 +21,13 @@ def timer(func) -> Any:
 
     return wrapper
 
-
+@timer
+def main():
+    exporter = DumpExporter()
+    exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_labels.xml", "labels", "out/labels.jsonl")
+    exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_artists.xml", "artists", "out/artists.jsonl")
+    exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_masters.xml", "masters", "out/masters.jsonl")
+    exporter.export("D:\\Downloads\\dicogs\\discogs_20241201_releases.xml", "releases", "out/releases.jsonl")
 
 if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(description='Process XML file')
-    parser.add_argument('-i','--input', type=str, nargs='?',
-                        default="C:\\Users\\Ivan\\PycharmProjects\\discogs-xml2json\\samples\\artists.xml",
-                        help='Path to XML file')
-    parser.add_argument('-o','--output', type=str, nargs='?',
-                        default="C:\\Users\\Ivan\\PycharmProjects\\discogs-xml2json\\out\\artists.jsonl",
-                        help='Path to JSONL file')
-    args = parser.parse_args()
-
-
-
-    xml_parser = DiscogsXMLParser(args.input)
-    xml_parser.parse()
-    # convert_xml_to_jsonl(args.input, args.output)
+    main()

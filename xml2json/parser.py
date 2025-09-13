@@ -1,4 +1,6 @@
-from typing import Iterator, Optional
+import time
+from datetime import timedelta
+from typing import Iterator, Generator
 from dataclasses import dataclass
 import lxml.etree as etree
 
@@ -15,18 +17,7 @@ def get_element_id(element: etree.Element) -> int:
     return int(id_)
 
 
-xpath_ancestor_finder = 'ancestor-or-self::*'
-
-
-def clear_memory(element: etree.Element):
-    """ This function should clear unnecessary elements with their parents """
-    element.clear()
-    for ancestor in element.xpath(xpath_ancestor_finder):
-        while ancestor.getprevious() is not None:
-            del ancestor.getparent()[0]
-
-
-def children_text(element: etree.Element) -> Optional[list[str],Iterator[str]]:
+def children_text(element: etree.Element) -> Iterator[str]:
     for child in element.iterchildren():
         if child.text is not None:
             yield stripped(child)
@@ -37,16 +28,86 @@ def stripped(element: etree.Element) -> str:
 @dataclass
 class DumpData:
     id: int
+    def __post_init__(self):
+        pass
+    def to_dict(self):
+        result = {'id': self.id}
+        for key in dir(self):
+            if not key.startswith('_') and key != 'id' and not callable(getattr(self, key)):
+                value = getattr(self, key)
+                if hasattr(value, 'to_dict'):
+                    result[key] = value.to_dict()
+                elif isinstance(value, (list, tuple)):
+                    result[key] = [v.to_dict() if hasattr(v, 'to_dict') else v for v in value]
+                else:
+                    result[key] = value
+        return result
+
+
+class DynamicObject:
+    __slots__ = ('__dict__',)
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def to_dict(self):
+        result = {}
+        for key in dir(self):
+            if key.startswith('_'):
+                continue
+
+            try:
+                value = getattr(self, key)
+            except AttributeError:
+                continue
+
+            if callable(value):
+                continue
+
+            if isinstance(value, Generator):
+                value = list(value)
+
+            if hasattr(value, 'to_dict'):
+                result[key] = value.to_dict()
+            elif isinstance(value, (list, tuple)):
+                result[key] = [v.to_dict() if hasattr(v, 'to_dict') else v for v in value]
+            else:
+                result[key] = value
+
+        return result
 
 class DiscogsXMLParser:
     parsed_element: str = None
+    parent_element: str = None
 
-    def parse(self) -> object:
-        for event, element in etree.iterparse(self.path, events=('start', 'end'), tag=self.parsed_element):
+    def parse(self) -> Iterator[DumpData]:
+        count = 0
+        start_time = time.time()
+        last_log_time = start_time
+
+        for event, element in etree.iterparse(self.path, events=('end',), tag=self.parsed_element):
+            if element.getparent().tag!=self.parent_element:
+                continue
+            count += 1
+            current_time = time.time()
+
+            if count % 1000000 == 0:
+                elapsed = current_time - start_time
+                elapsed_str = str(timedelta(seconds=int(elapsed)))
+                print(f"Count: {count}. Elapsed time: {elapsed_str}")
+                last_log_time = current_time
+
             yield self.build(get_element_id(element), element)
-            clear_memory(element)
+            element.clear()
+            while element.getprevious() is not None:
+                del element.getparent()[0]
 
-    def build(self, element_id: int, element: etree.Element) -> object:
+        total_time = time.time() - start_time
+        total_time_str = str(timedelta(seconds=int(total_time)))
+        print(f"[{self.parsed_element}] Elements: {count}. Total time: {total_time_str}")
+
+    def build(self, element_id: int, element: etree.Element) -> DumpData:
         raise NotImplementedError
 
     def __init__(self, path: str) -> None:
@@ -56,6 +117,7 @@ class DiscogsXMLParser:
 
 class DiscogsArtistParser(DiscogsXMLParser):
     parsed_element = "artist"
+    parent_element = "artists"
 
     def build(self, element_id: int, element: etree.Element) -> DumpData:
         artist = DumpData(element_id)
@@ -64,9 +126,8 @@ class DiscogsArtistParser(DiscogsXMLParser):
             if tag in ("name", "realname", "profile", "data_quality"):
                 setattr(artist, tag, stripped(child))
             elif tag in ("aliases", "namevariations", "groups", "urls"):
-                setattr(artist, tag, children_text(child))
+                setattr(artist, tag, list(children_text(child)))
             elif tag in ("members",):
-                """<name id="12186">John Ciafone</name></members>"""
                 setattr(artist, tag,list([(int(child_.get('id')), stripped(child_)) for child_ in child.iterchildren()]))
 
         return artist
@@ -74,6 +135,14 @@ class DiscogsArtistParser(DiscogsXMLParser):
 
 class DiscogsLabelParser(DiscogsXMLParser):
     parsed_element = "label"
+    parent_element = "labels"
+
+    def __build_sublabels_tags(self, element: etree.Element) -> Iterator[DynamicObject]:
+        for child in element.iterchildren():
+            sub_label = DynamicObject()
+            setattr(sub_label, "id", child.get("id"))
+            setattr(sub_label, "name", stripped(child))
+            yield sub_label
 
     def build(self, element_id: int, element: etree.Element) -> DumpData:
         label = DumpData(element_id)
@@ -82,28 +151,32 @@ class DiscogsLabelParser(DiscogsXMLParser):
             if tag in ("name", "contactinfo", "profile", "data_quality"):
                 setattr(label, tag, stripped(child))
             elif tag in ("urls",):
-                setattr(label, tag, children_text(child))
+                setattr(label, tag, list(children_text(child)))
+            elif tag in ("sublabels"):
+                setattr(label, tag, list(self.__build_sublabels_tags(child)))
             elif tag in ("parentLabel",):
                 setattr(label, tag, list([int(child.get('id')), stripped(child)]))
-            elif tag in ("sublabels",):
-                setattr(label, tag,list([(int(child_.get('id')), stripped(child_)) for child_ in child.iterchildren()]))
 
         return label
 
 
-def build_artists(element: etree.Element) -> Iterator[DumpData]:
+def build_artists(element: etree.Element) -> Iterator[DynamicObject]:
     for child in element.iterchildren():
-        artist = DumpData(get_element_id(child))
+        #okay.. some of the artists have no id :(
+        artist = DynamicObject()
         for child_ in child.iterchildren():
             tag = child_.tag
             if tag in ("name", "join", "anv", "role"):
                 setattr(artist, tag, stripped(child_))
+            if tag in ("id",):
+                setattr(artist, tag, int(child_.text))
+
         yield artist
 
 
-def build_videos(element: etree.Element) -> Iterator[object]:
+def build_videos(element: etree.Element) -> Iterator[DynamicObject]:
     for child in element.iterchildren():
-        video = object()
+        video = DynamicObject()
         for child_ in child.iterchildren():
             tag = child_.tag
             if tag in ("title", "description"):
@@ -115,6 +188,7 @@ def build_videos(element: etree.Element) -> Iterator[object]:
 
 class DiscogsMasterParser(DiscogsXMLParser):
     parsed_element = "master"
+    parent_element = "masters"
 
     def build(self, element_id: int, element: etree.Element) -> DumpData:
         master = DumpData(element_id)
@@ -134,45 +208,48 @@ class DiscogsMasterParser(DiscogsXMLParser):
 
 class DiscogsReleaseParser(DiscogsXMLParser):
     parsed_element = "release"
+    parent_element = "releases"
 
-    def __build_attribute_tags(self, element: etree.Element) -> Iterator[object]:
+    def __build_attribute_tags(self, element: etree.Element) -> Iterator[DynamicObject]:
         for child in element.iterchildren():
-            video = object()
+            video = DynamicObject()
             for key, value in child.attrib.items():
                 setattr(video, key, value.strip())
             yield video
 
-    def __build_tracklist(self, element: etree.Element) -> Iterator[object]:
+    def __build_tracklist(self, element: etree.Element) -> Iterator[DynamicObject]:
         for child in element.iterchildren():
-            video = object()
+            video = DynamicObject()
             for child_ in child.iterchildren():
                 tag = child_.tag
                 if tag in ("position", "title","duration"):
                     setattr(video, tag, stripped(child_))
             yield video
 
-    def __build_companies(self, element: etree.Element) -> Iterator[DumpData]:
+    def __build_companies(self, element: etree.Element) -> Iterator[DynamicObject]:
         for child in element.iterchildren():
-            company = DumpData(get_element_id(element))
+            company = DynamicObject()
             for child_ in child.iterchildren():
                 tag = child_.tag
                 if tag in ("name", "entity_type","entity_type_name","resource_url"):
                     setattr(company, tag, stripped(child_))
+                if tag in ("id",):
+                    setattr(company, tag, int(child_.text))
             yield company
 
 
-    def __build_formats(self, element: etree.Element) -> Iterator[object]:
+    def __build_formats(self, element: etree.Element) -> Iterator[DynamicObject]:
         for child in element.iterchildren():
-            video = object()
+            video = DynamicObject()
             for e in child.iterchildren():
                 t = e.tag
                 if t in ('descriptions'):
-                    setattr(video, t, "; ".join(children_text(e)))
+                    setattr(video, t, list((children_text(e))))
             for key, value in child.attrib.items():
                 setattr(video, key, value.strip())
             yield video
 
-    def build(self, element_id: int, element: etree.Element) -> object:
+    def build(self, element_id: int, element: etree.Element) -> DumpData:
         release = DumpData(element_id)
         setattr(release, 'status', element.get('status'))
         for child in element.iterchildren():
