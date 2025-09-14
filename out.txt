@@ -1,0 +1,2 @@
+Total size of XML files: ~59,6GB
+Total size of JSONL files: ~32,2GB

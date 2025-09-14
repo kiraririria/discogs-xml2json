@@ -1,7 +1,6 @@
-import time
-from datetime import timedelta
-from typing import Iterator, Generator
+from typing import Iterator, Generator, Any, Dict
 from dataclasses import dataclass
+
 import lxml.etree as etree
 
 
@@ -22,90 +21,83 @@ def children_text(element: etree.Element) -> Iterator[str]:
         if child.text is not None:
             yield stripped(child)
 
+
 def stripped(element: etree.Element) -> str:
     return element.text.strip() if element.text is not None else ""
 
+
+def extract_dict(result: Dict[str, Any], value: Any, key: str) -> Dict[str, Any]:
+    """
+    Convert value to a dictionary for serialization
+    Handles:
+    - Objects with to_dict method
+    - Lists/tuples
+    - Generators (converts to list)
+    - Primitive types
+    """
+
+    if hasattr(value, 'to_dict'):
+        result[key] = value.to_dict()
+    elif isinstance(value, (list, tuple)):
+        result[key] = [v.to_dict() if hasattr(v, 'to_dict') else v for v in value]
+    elif isinstance(value, Generator):
+        result[key] = list(value)
+    else:
+        result[key] = value
+    return result
+
+
 @dataclass
 class DumpData:
+    """
+    This class handle the main data of xml files that have id
+    It's used for releases, artists, labels, masters
+    """
+
     id: int
-    def __post_init__(self):
-        pass
-    def to_dict(self):
+
+    def to_dict(self) -> Dict[str, Any]:
         result = {'id': self.id}
-        for key in dir(self):
-            if not key.startswith('_') and key != 'id' and not callable(getattr(self, key)):
-                value = getattr(self, key)
-                if hasattr(value, 'to_dict'):
-                    result[key] = value.to_dict()
-                elif isinstance(value, (list, tuple)):
-                    result[key] = [v.to_dict() if hasattr(v, 'to_dict') else v for v in value]
-                else:
-                    result[key] = value
+        for key, value in self.__dict__.items():
+            if key != 'id':
+                result = extract_dict(result, value, key)
         return result
 
 
 class DynamicObject:
-    __slots__ = ('__dict__',)
+    """
+    This class handle others data of elements inside target of parse
+    We don't need to make unic classes for each tags
+    """
 
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    __slots__ = ('__dict__',)  # Limits class attributes to save memory
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         result = {}
-        for key in dir(self):
-            if key.startswith('_'):
-                continue
-
-            try:
-                value = getattr(self, key)
-            except AttributeError:
-                continue
-
-            if callable(value):
-                continue
-
-            if isinstance(value, Generator):
-                value = list(value)
-
-            if hasattr(value, 'to_dict'):
-                result[key] = value.to_dict()
-            elif isinstance(value, (list, tuple)):
-                result[key] = [v.to_dict() if hasattr(v, 'to_dict') else v for v in value]
-            else:
-                result[key] = value
-
+        for key, value in self.__dict__.items():
+            if not callable(value):
+                result = extract_dict(result, value, key)
         return result
+
 
 class DiscogsXMLParser:
     parsed_element: str = None
     parent_element: str = None
 
     def parse(self) -> Iterator[DumpData]:
-        count = 0
-        start_time = time.time()
-        last_log_time = start_time
-
         for event, element in etree.iterparse(self.path, events=('end',), tag=self.parsed_element):
-            if element.getparent().tag!=self.parent_element:
-                continue
-            count += 1
-            current_time = time.time()
 
-            if count % 1000000 == 0:
-                elapsed = current_time - start_time
-                elapsed_str = str(timedelta(seconds=int(elapsed)))
-                print(f"Count: {count}. Elapsed time: {elapsed_str}")
-                last_log_time = current_time
+            # Labels.xml have inner tags with same naming. Iterparse also parse these elements as targets labels
+            if element.getparent().tag != self.parent_element:
+                continue
 
             yield self.build(get_element_id(element), element)
+
+            # We need safe cleaning to free memory
             element.clear()
             while element.getprevious() is not None:
                 del element.getparent()[0]
-
-        total_time = time.time() - start_time
-        total_time_str = str(timedelta(seconds=int(total_time)))
-        print(f"[{self.parsed_element}] Elements: {count}. Total time: {total_time_str}")
+        print(f"[{self.parent_element}] was parsed")
 
     def build(self, element_id: int, element: etree.Element) -> DumpData:
         raise NotImplementedError
@@ -128,7 +120,7 @@ class DiscogsArtistParser(DiscogsXMLParser):
             elif tag in ("aliases", "namevariations", "groups", "urls"):
                 setattr(artist, tag, list(children_text(child)))
             elif tag in ("members",):
-                setattr(artist, tag,list([(int(child_.get('id')), stripped(child_)) for child_ in child.iterchildren()]))
+                setattr(artist, tag, list([(int(child_.get('id')), stripped(child_)) for child_ in child.iterchildren()]))
 
         return artist
 
@@ -162,7 +154,7 @@ class DiscogsLabelParser(DiscogsXMLParser):
 
 def build_artists(element: etree.Element) -> Iterator[DynamicObject]:
     for child in element.iterchildren():
-        #okay.. some of the artists have no id :(
+        # okay.. some of the artists have no id :(
         artist = DynamicObject()
         for child_ in child.iterchildren():
             tag = child_.tag
@@ -222,7 +214,7 @@ class DiscogsReleaseParser(DiscogsXMLParser):
             video = DynamicObject()
             for child_ in child.iterchildren():
                 tag = child_.tag
-                if tag in ("position", "title","duration"):
+                if tag in ("position", "title", "duration"):
                     setattr(video, tag, stripped(child_))
             yield video
 
@@ -231,12 +223,11 @@ class DiscogsReleaseParser(DiscogsXMLParser):
             company = DynamicObject()
             for child_ in child.iterchildren():
                 tag = child_.tag
-                if tag in ("name", "entity_type","entity_type_name","resource_url"):
+                if tag in ("name", "entity_type", "entity_type_name", "resource_url"):
                     setattr(company, tag, stripped(child_))
                 if tag in ("id",):
                     setattr(company, tag, int(child_.text))
             yield company
-
 
     def __build_formats(self, element: etree.Element) -> Iterator[DynamicObject]:
         for child in element.iterchildren():
@@ -254,13 +245,13 @@ class DiscogsReleaseParser(DiscogsXMLParser):
         setattr(release, 'status', element.get('status'))
         for child in element.iterchildren():
             tag = child.tag
-            if tag in ("title", "country", "released", "notes","data_quality"):
+            if tag in ("title", "country", "released", "notes", "data_quality"):
                 setattr(release, tag, stripped(child))
-            elif tag in ("genres","styles"):
+            elif tag in ("genres", "styles"):
                 setattr(release, tag, list(children_text(child)))
             elif tag in ("artists", "extraartists"):
                 setattr(release, tag, list(build_artists(child)))
-            elif tag in ("identifiers","labels"):
+            elif tag in ("identifiers", "labels"):
                 setattr(release, tag, list(self.__build_attribute_tags(child)))
             elif tag == "videos":
                 setattr(release, tag, list(build_videos(child)))
@@ -273,4 +264,3 @@ class DiscogsReleaseParser(DiscogsXMLParser):
             elif tag == "master_id":
                 setattr(release, tag, int(child.text))
         return release
-

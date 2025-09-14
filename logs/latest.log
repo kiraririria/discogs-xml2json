@@ -1,43 +1,13 @@
-C:\Users\Ivan\anaconda3\envs\dev\python.exe -X pycache_prefix=C:\Users\Ivan\AppData\Local\JetBrains\PyCharm2024.2\cpython-cache "C:/Program Files/JetBrains/PyCharm 2024.2.3/plugins/python-ce/helpers/pydev/pydevd.py" --multiprocess --qt-support=auto --client 127.0.0.1 --port 58777 --file C:\Users\Ivan\PycharmProjects\discogs-xml2json\xml2json.py
+C:\Users\Ivan\anaconda3\envs\dev\python.exe -X pycache_prefix=C:\Users\Ivan\AppData\Local\JetBrains\PyCharm2024.2\cpython-cache "C:/Program Files/JetBrains/PyCharm 2024.2.3/plugins/python-ce/helpers/pydev/pydevd.py" --multiprocess --qt-support=auto --client 127.0.0.1 --port 61284 --file C:\Users\Ivan\PycharmProjects\discogs-xml2json\xml2json.py
 Connected to pydev debugger (build 242.23339.19)
-Count: 1000000. Elapsed time: 0:00:41
-Count: 2000000. Elapsed time: 0:01:16
-[label] Elements: 2284474. Total time: 0:01:26
-Export[labels] Total time: 0:01:26
-Count: 1000000. Elapsed time: 0:00:47
-Count: 2000000. Elapsed time: 0:01:28
-Count: 3000000. Elapsed time: 0:02:05
-Count: 4000000. Elapsed time: 0:02:41
-Count: 5000000. Elapsed time: 0:03:20
-Count: 6000000. Elapsed time: 0:03:54
-Count: 7000000. Elapsed time: 0:04:28
-Count: 8000000. Elapsed time: 0:05:01
-Count: 9000000. Elapsed time: 0:05:34
-[artist] Elements: 9172501. Total time: 0:05:40
-Export[artists] Total time: 0:05:40
-Count: 1000000. Elapsed time: 0:02:46
-Count: 2000000. Elapsed time: 0:04:48
-[master] Elements: 2469666. Total time: 0:05:41
-Export[masters] Total time: 0:05:41
-Count: 1000000. Elapsed time: 0:09:02
-Count: 2000000. Elapsed time: 0:17:39
-Count: 3000000. Elapsed time: 0:26:04
-Count: 4000000. Elapsed time: 0:34:10
-Count: 5000000. Elapsed time: 0:42:08
-Count: 6000000. Elapsed time: 0:50:00
-Count: 7000000. Elapsed time: 0:57:50
-Count: 8000000. Elapsed time: 1:05:36
-Count: 9000000. Elapsed time: 1:13:12
-Count: 10000000. Elapsed time: 1:20:43
-Count: 11000000. Elapsed time: 1:28:06
-Count: 12000000. Elapsed time: 1:35:29
-Count: 13000000. Elapsed time: 1:42:45
-Count: 14000000. Elapsed time: 1:50:02
-Count: 15000000. Elapsed time: 1:57:19
-Count: 16000000. Elapsed time: 2:04:32
-Count: 17000000. Elapsed time: 2:11:39
-[release] Elements: 17780660. Total time: 2:17:08
-Export[releases] Total time: 2:17:08
-Время выполнения: 02:29:56.866
+[labels] was parsed
+[labels] was exported
+[artists] was parsed
+[artists] was exported
+[masters] was parsed
+[masters] was exported
+[releases] was parsed
+[releases] was exported
+Total Time: 01:39:27.447
 
 Process finished with exit code 0

@@ -16,7 +16,7 @@ def timer(func) -> Any:
         minutes, seconds = divmod(remainder, 60)
         milliseconds = int(td.microseconds / 1000)
         time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
-        print(f"Время выполнения: {time_str}")
+        print(f"Total Time: {time_str}")
         return result
 
     return wrapper
