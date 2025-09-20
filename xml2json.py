@@ -2,7 +2,7 @@ import time
 from datetime import timedelta
 from typing import Any
 
-from xml2json.exporter import DumpExporter
+from xml2json.exporter import export
 
 def timer(func) -> Any:
     def wrapper(*args, **kwargs):
@@ -23,11 +23,11 @@ def timer(func) -> Any:
 
 @timer
 def main():
-    exporter = DumpExporter()
-    exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_labels.xml", "labels", "out/labels.jsonl")
-    exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_artists.xml", "artists", "out/artists.jsonl")
-    exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_masters.xml", "masters", "out/masters.jsonl")
-    exporter.export("D:\\Downloads\\dicogs\\discogs_20241201_releases.xml", "releases", "out/releases.jsonl")
+    export("samples/masters.xml",  "out/masters.jsonl")
+    # exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_labels.xml", "labels", "out/labels.jsonl")
+    # exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_artists.xml", "artists", "out/artists.jsonl")
+    # exporter.export("D:\\Downloads\\dicogs\\discogs_20250901_masters.xml", "masters", "out/masters.jsonl")
+    # exporter.export("D:\\Downloads\\dicogs\\discogs_20241201_releases.xml", "releases", "out/releases.jsonl")
 
 if __name__ == '__main__':
     main()
